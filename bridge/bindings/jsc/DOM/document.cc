@@ -6,7 +6,6 @@
 #include "document.h"
 #include "comment_node.h"
 #include "element.h"
-#include "foundation/ui_command_callback_queue.h"
 #include "text_node.h"
 #include <mutex>
 #include <regex>
@@ -160,6 +159,10 @@ JSDocument::JSDocument(JSContext *context) : JSNode(context, "Document") {
     JSEvent::defineEvent(EVENT_SCALE, [](JSContext *context, void *nativeEvent) -> EventInstance * {
       return new GestureEventInstance(JSGestureEvent::instance(context),
                                       reinterpret_cast<NativeGestureEvent *>(nativeEvent));
+    });
+    JSEvent::defineEvent(EVENT_CLICK, [](JSContext *context, void *nativeEvent) -> EventInstance * {
+      return new MouseEventInstance(JSMouseEvent::instance(context),
+                                      reinterpret_cast<NativeMouseEvent *>(nativeEvent));
     });
   }
   if (!document_registered) {

@@ -3,10 +3,13 @@
  * Author: Kraken Team.
  */
 
+#ifndef KRAKEN_BRIDGE_JSC_H
+#define KRAKEN_BRIDGE_JSC_H
+
 // MUST READ:
 // All the struct which prefix with NativeXXX struct (exp: NativeElement) has a corresponding struct in Dart code.
 // All struct members include variables and functions must be follow the same order with Dart class, to keep the same memory layout cross dart and C++ code.
-
+#include "kraken_foundation.h"
 #include <JavaScriptCore/JavaScript.h>
 #include <chrono>
 #include <deque>
@@ -15,8 +18,6 @@
 #include <map>
 #include <unordered_map>
 #include <vector>
-
-#include "kraken_bridge_jsc_config.h"
 
 using JSExceptionHandler = std::function<void(int32_t contextId, const char *errmsg)>;
 
@@ -56,6 +57,8 @@ struct NativeEvent;
 class JSGestureEvent;
 struct NativeGestureEvent;
 class GestureEventInstance;
+struct NativeMouseEvent;
+class MouseEventInstance;
 
 class JSContext {
 public:
@@ -101,7 +104,7 @@ public:
                                           JSObjectCallAsFunctionCallback callback);
 
 private:
-  FML_DISALLOW_COPY_ASSIGN_AND_MOVE(JSFunctionHolder);
+  KRAKEN_DISALLOW_COPY_ASSIGN_AND_MOVE(JSFunctionHolder);
 };
 
 class KRAKEN_EXPORT JSStringHolder {
@@ -125,7 +128,7 @@ public:
 private:
   JSContext *m_context;
   JSStringRef m_string{nullptr};
-  FML_DISALLOW_COPY_ASSIGN_AND_MOVE(JSStringHolder);
+  KRAKEN_DISALLOW_COPY_ASSIGN_AND_MOVE(JSStringHolder);
 };
 
 class KRAKEN_EXPORT JSValueHolder {
@@ -139,7 +142,7 @@ public:
 private:
   JSContext *m_context;
   JSValueRef m_value{nullptr};
-  FML_DISALLOW_COPY_ASSIGN_AND_MOVE(JSValueHolder);
+  KRAKEN_DISALLOW_COPY_ASSIGN_AND_MOVE(JSValueHolder);
 };
 
 void KRAKEN_EXPORT buildUICommandArgs(JSStringRef key, NativeString &args_01);
@@ -389,12 +392,9 @@ public:
   void getPropertyNames(JSPropertyNameAccumulatorRef accumulator) override;
   ~EventInstance() override;
   NativeEvent *nativeEvent;
-  bool _dispatchFlag{false};
-  bool _canceledFlag{false};
-  bool _initializedFlag{true};
-  bool _stopPropagationFlag{false};
-  bool _stopImmediatePropagationFlag{false};
-  bool _inPassiveListenerFlag{false};
+  bool _cancelled{false};
+  bool _propagationStopped{false};
+  bool _propagationImmediatelyStopped{false};
 
 private:
   friend JSEvent;
@@ -1026,4 +1026,72 @@ private:
   NativeGestureEvent *nativeGestureEvent;
 };
 
+struct NativeMouseEvent {
+  NativeMouseEvent() = delete;
+  explicit NativeMouseEvent(NativeEvent *nativeEvent) : nativeEvent(nativeEvent){};
+
+  NativeEvent *nativeEvent;
+
+  double_t clientX;
+
+  double_t clientY;
+
+  double_t offsetX;
+
+  double_t offsetY;
+};
+
+class JSMouseEvent : public JSEvent {
+public:
+  DEFINE_OBJECT_PROPERTY(MouseEvent, 4, clientX, clientY, offsetX, offsetY);
+
+  DEFINE_PROTOTYPE_OBJECT_PROPERTY(MouseEvent, 1, initMouseEvent);
+
+  static std::unordered_map<JSContext *, JSMouseEvent *> instanceMap;
+  OBJECT_INSTANCE(JSMouseEvent)
+
+  JSObjectRef instanceConstructor(JSContextRef ctx, JSObjectRef constructor, size_t argumentCount,
+                                  const JSValueRef *arguments, JSValueRef *exception) override;
+
+  JSValueRef getProperty(std::string &name, JSValueRef *exception) override;
+
+protected:
+  JSMouseEvent() = delete;
+  explicit JSMouseEvent(JSContext *context);
+  ~JSMouseEvent() override;
+
+private:
+  friend MouseEventInstance;
+
+  JSFunctionHolder m_initMouseEvent{context, prototypeObject, this, "initMouseEvent", initMouseEvent};
+
+  static JSValueRef initMouseEvent(JSContextRef ctx, JSObjectRef function, JSObjectRef thisObject,
+                                     size_t argumentCount, const JSValueRef arguments[], JSValueRef *exception);
+};
+
+class MouseEventInstance : public EventInstance {
+public:
+  MouseEventInstance() = delete;
+  explicit MouseEventInstance(JSMouseEvent *jsMouseEvent, std::string MouseEventType, JSValueRef eventInit,
+                                JSValueRef *exception);
+  explicit MouseEventInstance(JSMouseEvent *jsMouseEvent, NativeMouseEvent *nativeMouseEvent);
+  JSValueRef getProperty(std::string &name, JSValueRef *exception) override;
+  bool setProperty(std::string &name, JSValueRef value, JSValueRef *exception) override;
+  void getPropertyNames(JSPropertyNameAccumulatorRef accumulator) override;
+  ~MouseEventInstance() override;
+
+private:
+  friend JSMouseEvent;
+  JSValueHolder m_clientX{context, nullptr};
+  JSValueHolder m_clientY{context, nullptr};
+  JSValueHolder m_offsetX{context, nullptr};
+  JSValueHolder m_offsetY{context, nullptr};
+  NativeMouseEvent *nativeMouseEvent;
+};
+
 } // namespace kraken::binding::jsc
+
+KRAKEN_EXPORT
+JSGlobalContextRef getGlobalContextRef(int32_t contextId);
+
+#endif
